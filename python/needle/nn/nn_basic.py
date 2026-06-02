@@ -6,6 +6,9 @@ from needle import ops
 import needle.init as init
 import numpy as np
 
+from python import needle
+from python.needle.init.init_initializers import kaiming_uniform
+
 
 class Parameter(Tensor):
     """A special kind of tensor that represents parameters."""
@@ -86,12 +89,17 @@ class Linear(Module):
         self.out_features = out_features
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        self.weight=Parameter(kaiming_uniform(in_features,out_features))
+        if bias:
+            self.bias=Parameter(kaiming_uniform(fan_in=out_features,fan_out=1).transpose())
         ### END YOUR SOLUTION
 
     def forward(self, X: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if 'bias' in self.__dict__:
+            return X.matmul(self.weight)+self.bias.broadcast_to((X.shape[0],self.out_features))
+        else:
+            return X.matmul(self.weight)
         ### END YOUR SOLUTION
 
 
@@ -105,7 +113,7 @@ class Flatten(Module):
 class ReLU(Module):
     def forward(self, x: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return needle.relu(x)
         ### END YOUR SOLUTION
 
 class Sequential(Module):
@@ -115,7 +123,10 @@ class Sequential(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        out=x
+        for module in self.modules:
+            out=module(out)
+        return out
         ### END YOUR SOLUTION
 
 
