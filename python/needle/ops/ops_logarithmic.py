@@ -12,7 +12,7 @@ import numpy as array_api
 class LogSoftmax(TensorOp):
     def compute(self, Z: NDArray) -> NDArray:
         ### BEGIN YOUR SOLUTION
-        return (Tensor(Z)-logsumexp(Tensor(Z),axes=(1,))).realize_cached_data()
+        return (Tensor(Z)-reshape(logsumexp(Tensor(Z),axes=1),(Z.shape[0],1))).realize_cached_data()
         ### END YOUR SOLUTION
 
     def gradient(self, out_grad: Tensor, node: Tensor):
@@ -32,22 +32,38 @@ class LogSumExp(TensorOp):
     def compute(self, Z: NDArray) -> NDArray:
         ### BEGIN YOUR SOLUTION
         maxz=array_api.max(Z,self.axes,keepdims=True)
-        sum_exp=array_api.sum(array_api.exp(Z-maxz),axis=self.axes)
-        if self.axes is None:
-            maxz=maxz.reshape(())
-        else:
-            # 去掉归约轴
-            maxz = array_api.squeeze(maxz, axis=self.axes)
-        return array_api.log(sum_exp)+maxz
+        sum_exp=array_api.sum(array_api.exp(Z-maxz),axis=self.axes,keepdims=True)
+        return array_api.squeeze(array_api.log(sum_exp)+maxz,self.axes)
         ### END YOUR SOLUTION
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         ### BEGIN YOUR SOLUTION
-        input=node.inputs[0]
-        sum_exp=needle.summation(needle.exp(input),axes=self.axes)
-        sum_input=needle.reshape(sum_exp,(input.shape[0],1))
-        out_grad_reshape=needle.reshape(out_grad,(input.shape[0],1))
-        return (multiply(out_grad_reshape,(needle.exp(input)/sum_input)),)
+        input = node.inputs[0]
+        
+        # 计算 softmax
+        input_data = input.realize_cached_data()
+        max_input = array_api.max(input_data, self.axes, keepdims=True)
+        stable_input = input_data - max_input
+        exp_stable = array_api.exp(stable_input)
+        sum_exp = array_api.sum(exp_stable, axis=self.axes, keepdims=True)
+        softmax = exp_stable / sum_exp
+        
+        # 处理 out_grad 维度
+        out_grad_data = out_grad.realize_cached_data()
+        
+        # 如果维度不匹配，调整 out_grad
+        if out_grad_data.shape != softmax.shape:
+            # 确定在哪些轴插入维度
+            axes_to_expand = self.axes if self.axes is not None else tuple(range(softmax.ndim))
+            
+            # 插入维度
+            for axis in sorted(axes_to_expand):
+                out_grad_data = array_api.expand_dims(out_grad_data, axis=axis)
+        
+        # 计算梯度
+        grad_data = out_grad_data * softmax
+        
+        return (Tensor(grad_data),)
         ### END YOUR SOLUTION
 
 
