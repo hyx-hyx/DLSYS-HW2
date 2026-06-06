@@ -161,12 +161,19 @@ class LayerNorm1d(Module):
         self.dim = dim
         self.eps = eps
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        self.weight=Parameter(array=init.ones(dim))
+        self.bias=Parameter(array=init.zeros(dim))
         ### END YOUR SOLUTION
 
     def forward(self, x: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        dim=self.dim
+        mean=needle.reshape(needle.summation(x,axes=(1,))/dim,(x.shape[0],1))
+        x_minus_mean=x-needle.broadcast_to(mean,x.shape)
+        var=needle.reshape(needle.summation(needle.power_scalar(x_minus_mean,2),axes=(1,))/dim,(x.shape[0],1))
+        var_broad_cast=needle.broadcast_to(var,x.shape)
+        norm=x_minus_mean/needle.power_scalar(needle.add_scalar(var_broad_cast,self.eps),0.5)
+        return self.weight*norm+needle.broadcast_to(needle.reshape(self.bias,(1,dim)),x.shape)
         ### END YOUR SOLUTION
 
 

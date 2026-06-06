@@ -99,8 +99,7 @@ class PowerScalar(TensorOp):
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        v=node.inputs
-        return (self.scalar*array_api.pow(v,self.scalar-1)[0]*out_grad,)
+        return (mul_scalar(power_scalar(node.inputs[0],self.scalar-1),self.scalar)*out_grad,)
         ### END YOUR SOLUTION
 
 
@@ -177,7 +176,6 @@ class Reshape(TensorOp):
 
     def compute(self, a):
         ### BEGIN YOUR SOLUTION
-        self.original_shape=a.shape
         return array_api.reshape(a,self.shape)
         ### END YOUR SOLUTION
 
