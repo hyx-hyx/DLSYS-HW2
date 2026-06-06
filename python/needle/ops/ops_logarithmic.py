@@ -1,6 +1,5 @@
 from typing import Optional, Any, Union
 
-from python import needle
 from ..autograd import NDArray
 from ..autograd import Op, Tensor, Value, TensorOp
 from ..autograd import TensorTuple, TensorTupleOp
@@ -12,12 +11,16 @@ import numpy as array_api
 class LogSoftmax(TensorOp):
     def compute(self, Z: NDArray) -> NDArray:
         ### BEGIN YOUR SOLUTION
-        return (Tensor(Z)-reshape(logsumexp(Tensor(Z),axes=1),(Z.shape[0],1))).realize_cached_data()
+        maxz=array_api.max(Z,axis=1,keepdims=True)
+        log_sum_exp_z=array_api.log(array_api.sum(array_api.exp(Z-maxz),axis=1,keepdims=True))
+        return Z-log_sum_exp_z-maxz
         ### END YOUR SOLUTION
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        sum_out_grad=reshape(summation(out_grad,axes=1),(out_grad.shape[0],1))
+        softmax=exp(logsoftmax(node.inputs[0]))
+        return (out_grad-softmax*sum_out_grad,)
         ### END YOUR SOLUTION
 
 
@@ -38,32 +41,19 @@ class LogSumExp(TensorOp):
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         ### BEGIN YOUR SOLUTION
-        input = node.inputs[0]
+        Z = node.inputs[0]
         
-        # 计算 softmax
-        input_data = input.realize_cached_data()
-        max_input = array_api.max(input_data, self.axes, keepdims=True)
-        stable_input = input_data - max_input
-        exp_stable = array_api.exp(stable_input)
-        sum_exp = array_api.sum(exp_stable, axis=self.axes, keepdims=True)
-        softmax = exp_stable / sum_exp
-        
-        # 处理 out_grad 维度
-        out_grad_data = out_grad.realize_cached_data()
-        
-        # 如果维度不匹配，调整 out_grad
-        if out_grad_data.shape != softmax.shape:
-            # 确定在哪些轴插入维度
-            axes_to_expand = self.axes if self.axes is not None else tuple(range(softmax.ndim))
+        if self.axes is not None:
+            keep_dims_shape=list(Z.shape)
+            for axis in self.axes:
+                keep_dims_shape[axis]=1
+        else:
+            keep_dims_shape=[1]*len(Z.shape)
             
-            # 插入维度
-            for axis in sorted(axes_to_expand):
-                out_grad_data = array_api.expand_dims(out_grad_data, axis=axis)
-        
-        # 计算梯度
-        grad_data = out_grad_data * softmax
-        
-        return (Tensor(grad_data),)
+        # 计算 softmax
+        softmax=exp(Z-reshape(logsumexp(Z,self.axes),tuple(keep_dims_shape)))
+        out_grad=reshape(out_grad,keep_dims_shape)
+        return (out_grad*softmax,)
         ### END YOUR SOLUTION
 
 

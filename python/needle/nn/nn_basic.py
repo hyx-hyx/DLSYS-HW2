@@ -5,8 +5,8 @@ from needle.autograd import Tensor
 from needle import ops
 import needle.init as init
 import numpy as np
+import needle
 
-from python import needle
 from python.needle.init.init_initializers import kaiming_uniform
 
 
@@ -133,7 +133,8 @@ class Sequential(Module):
 class SoftmaxLoss(Module):
     def forward(self, logits: Tensor, y: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        z_y=needle.summation(logits*init.one_hot(n=logits.shape[1],i=y))
+        return (needle.summation(needle.logsumexp(logits,axes=(1,)))-z_y)/logits.shape[0]
         ### END YOUR SOLUTION
 
 
