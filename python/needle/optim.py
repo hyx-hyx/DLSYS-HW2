@@ -1,7 +1,8 @@
 """Optimization module"""
 import needle as ndl
 import numpy as np
-
+from .autograd import Tensor
+import needle.init as init
 
 class Optimizer:
     def __init__(self, params):
@@ -25,7 +26,15 @@ class SGD(Optimizer):
 
     def step(self):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        for para in self.params:
+            shape=para.shape
+            grad=para.grad+self.weight_decay*para
+            if para not in self.u.keys():
+                self.u[para]=init.zeros(*shape)
+            momentum=Tensor([self.momentum])
+            old_u=self.u[para].detach()
+            self.u[para]=ndl.broadcast_to(momentum*old_u,shape)+(init.ones(*momentum.shape)-momentum)*grad
+            para.data=para.data-self.lr*Tensor(self.u[para],dtype='float32')
         ### END YOUR SOLUTION
 
     def clip_grad_norm(self, max_norm=0.25):
