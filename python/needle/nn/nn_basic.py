@@ -185,10 +185,12 @@ class BatchNorm1d(Module):
             var_broad_cast = needle.broadcast_to(reshape_var, x.shape)
 
             # 更新running_mean (要原地更新，不要创建多余的计算图节点)
-            self.running_mean.data = self.running_mean.data.data * (1 - self.momentum) + mean * self.momentum
+            self.running_mean.data = self.running_mean.data * \
+                (1 - self.momentum) + Tensor(mean, dtype='float32') * self.momentum
 
             # 更新running_var (要原地更新，不要创建多余的计算图节点)
-            self.running_var.data = self.running_var.data * (1 - self.momentum) + var * self.momentum
+            self.running_var.data = self.running_var.data * \
+                (1 - self.momentum) + Tensor(var, dtype='float32') * self.momentum
         else:
             reshape_mean = needle.reshape(self.running_mean, (1, x_s1))
             x_minus_mean = x - needle.broadcast_to(reshape_mean, x.shape)
@@ -233,7 +235,7 @@ class Dropout(Module):
     def forward(self, x: Tensor) -> Tensor:
         # BEGIN YOUR SOLUTION
         if self.training:
-            return x * randb(*x.shape, p=self.p, dtype=float) / (1 - self.p)
+            return x * randb(*x.shape, p=1 - self.p, dtype=float) / (1 - self.p)
         else:
             return x
         # END YOUR SOLUTION

@@ -661,3 +661,125 @@ self.running_var.data = (
 | running_mean/var 不会进入 optimizer，step() 不报错 | running_mean/var 仍是 Parameter，optimizer 仍持有引用 |
 | 但 forward 每次创建孤立子图，epoch 多了会内存泄漏 | forward 不泄漏图节点 |
 | 短期测试能过，长期有问题 | step() 仍然对它们调用 `para.grad + ...`（grad=None）→ 崩溃 |
+
+
+---
+---
+
+# DLSYS HW2 Dropout 中 `randb(p)` 语义与标准 Dropout 的 `p` 语义相反
+
+## 问题背景
+
+涉及的测试用例：
+- `test_mlp_resnet_forward_2`：MLPResNet + BatchNorm1d + `drop_prob=0.0` 前向传播测试
+
+**实际输出**: 28/28 元素全部 mismatched，Max absolute difference: 5.49  
+**期望输出**: 一个非退化的 (2, 14) 矩阵
+
+test_1（`drop_prob=0.5`）通过，test_2（`drop_prob=0.0`）失败。
+
+---
+
+## 问题位置
+
+**文件**：`python/needle/nn/nn_basic.py`，`Dropout.forward()` 第 237 行
+
+```python
+return x * randb(*x.shape, p=self.p, dtype=float) / (1 - self.p)
+```
+
+---
+
+## 核心问题：`randb(p)` 的 `p` 是"保留概率"，Dropout 的 `self.p` 是"丢弃概率"
+
+### `randb` 的语义
+
+**文件**：`python/needle/init/init_basic.py` 第 46 行
+
+```python
+array = device.rand(*shape) <= p
+```
+
+`randb(*shape, p=q)` 的意思是：对每个元素，生成一个 [0,1) 之间的随机数，若 `≤ q` 则返回 `True`（mask=1），否则返回 `False`（mask=0）。**`p` 是"产生 True（保留元素）"的概率。**
+
+### Dropout 中 `self.p` 的语义
+
+在标准 dropout 中，`p` 是**丢弃概率**（probability of dropping a neuron），即：
+- 0 以概率 p（被丢弃）
+- 1 以概率 (1-p)（被保留）
+- 保留的神经元被缩放 `1/(1-p)` 以保持期望不变
+
+### 两个语义的对比表
+
+| `self.p` (dropout 丢弃概率) | `randb(p=self.p)` 的实际效果 | 期望效果 | 结果 |
+|:---:|:---|:---|:---:|
+| 0.0 | randb(p=0.0) → 0% 元素为 True → **全零 mask** | 丢弃 0% → 全 1 mask（恒等映射） | ❌ 信号被清零 |
+| 0.3 | randb(p=0.3) → 30% 元素为 True → 保留 30% | 丢弃 30% → 保留 70% | ❌ 保留率反了 |
+| 0.5 | randb(p=0.5) → 50% 元素为 True → 保留 50% | 丢弃 50% → 保留 50% | ✅ 碰巧一致 |
+| 1.0 | randb(p=1.0) → 100% 元素为 True → 全 1 mask | 丢弃 100% → 全零 mask | ❌ 含义完全相反 |
+
+**结论：仅当 `p=0.5` 时，"保留概率 = p"和"保留概率 = 1-p"恰好相等，其他所有 p 值都错误。**
+
+---
+
+## 错误传播链
+
+### test_2（drop_prob=0.0）的具体传播路径
+
+```
+Input x（原始信号）
+    │
+    ▼
+[ResidualBlock 的中间路径]
+    │
+    ├── Linear(25, 12)           → out1  （正常）
+    ├── BatchNorm1d(12)          → out2  （正常）
+    ├── ReLU()                   → out3  （正常）
+    ├── Dropout(p=0.0)           → ❌ randb(p=0.0) = 全零 → out3 * 0 / 1.0 = 全零
+    ├── Linear(12, 25)           → ❌ 输入全零 → X@W=0, 输出 = bias（每维度一个常数）
+    └── BatchNorm1d(25)          → ❌ batch 内所有样本值相同 → var≈0 → norm≈0 → 全零
+
+    Residual → 全零 + x = x     （残差退化，因为中间路径输出为零）
+    ReLU(x)                       （最终输出仅为 ReLU(输入)）
+```
+
+整个网络的 5 个 `ResidualBlock` 全部退化为 `ReLU(x)`，而非 `ReLU(fn(x) + x)`。最终 `MLPResNet` 的输出完全偏离期望值。
+
+### 验证实验
+
+```python
+randb(2, 3, p=0.0, dtype='float32').numpy()
+# → [[0. 0. 0.]
+#     [0. 0. 0.]]
+# All zeros: True
+
+x = Tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+Dropout(0.0)(x).numpy()
+# → [[0. 0. 0.]
+#     [0. 0. 0.]]
+# Is identity? False   ← 0% dropout 应该是恒等映射！
+```
+
+---
+
+## 修复方向
+
+将 `randb` 调用的参数从 `self.p` 改为 `1 - self.p`：
+
+```python
+# 错误 ❌：randb 的 p 是"保留概率"，self.p 是"丢弃概率"——语义相反
+return x * randb(*x.shape, p=self.p, dtype=float) / (1 - self.p)
+
+# 正确 ✅：1-self.p 将"丢弃概率"转换为"保留概率"
+return x * randb(*x.shape, p=1 - self.p, dtype=float) / (1 - self.p)
+```
+
+修复后：
+| `self.p` | `randb(p=1-self.p)` | mask 中 1 的比例 | 期望保留率 | 结果 |
+|:---:|:---|:---:|:---:|:---:|
+| 0.0 | randb(p=1.0) | 100% | 100% | ✅ |
+| 0.3 | randb(p=0.7) | 70% | 70% | ✅ |
+| 0.5 | randb(p=0.5) | 50% | 50% | ✅（不变） |
+| 1.0 | randb(p=0.0) | 0% | 0% | ✅ |
+
+此修复不影响现有通过的测试（包括 `test_nn_dropout_forward_1` 和 `test_mlp_resnet_forward_1`，因为它们的 p=0.5 时 `1-p = p`，行为不变），但能修复 p≠0.5 的所有 dropout 场景。

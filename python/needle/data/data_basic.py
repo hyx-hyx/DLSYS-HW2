@@ -1,8 +1,8 @@
+from typing import Any, Iterable, Iterator, List, Optional, Sized, Union
+
 import numpy as np
+
 from ..autograd import Tensor
-
-from typing import Iterator, Optional, List, Sized, Union, Iterable, Any
-
 
 
 class Dataset:
@@ -21,7 +21,7 @@ class Dataset:
 
     def __len__(self) -> int:
         raise NotImplementedError
-    
+
     def apply_transforms(self, x):
         if self.transforms is not None:
             # apply the transforms
@@ -55,17 +55,18 @@ class DataLoader:
         self.shuffle = shuffle
         self.batch_size = batch_size
         if not self.shuffle:
-            self.ordering = np.array_split(np.arange(len(dataset)), 
+            self.ordering = np.array_split(np.arange(len(dataset)),
                                            range(batch_size, len(dataset), batch_size))
 
     def __iter__(self):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        # BEGIN YOUR SOLUTION
+        self.idx = 0
+        # END YOUR SOLUTION
         return self
 
     def __next__(self):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
-
+        # BEGIN YOUR SOLUTION
+        batch = self.dataset[self.ordering[self.idx]]
+        self.idx += 1
+        return batch
+        # END YOUR SOLUTION
