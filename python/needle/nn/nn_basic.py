@@ -1,14 +1,16 @@
 """The module.
 """
 from typing import Any
-from needle.autograd import Tensor
-from needle import ops
+
+import needle
 import needle.init as init
 import numpy as np
-import needle
+from needle import ops
+from needle.autograd import Tensor
 
-from python.needle.init.init_initializers import kaiming_uniform
 from python.needle.init.init_basic import randb
+from python.needle.init.init_initializers import kaiming_uniform
+
 
 class Parameter(Tensor):
     """A special kind of tensor that represents parameters."""
@@ -83,41 +85,48 @@ class Identity(Module):
 
 
 class Linear(Module):
-    def __init__(self, in_features: int, out_features: int, bias: bool = True, device: Any | None = None, dtype: str = "float32") -> None:
+    def __init__(
+            self,
+            in_features: int,
+            out_features: int,
+            bias: bool = True,
+            device: Any | None = None,
+            dtype: str = "float32") -> None:
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
 
-        ### BEGIN YOUR SOLUTION
-        self.weight=Parameter(kaiming_uniform(in_features,out_features))
+        # BEGIN YOUR SOLUTION
+        self.weight = Parameter(kaiming_uniform(in_features, out_features))
         if bias:
-            self.bias=Parameter(kaiming_uniform(fan_in=out_features,fan_out=1).transpose())
-        ### END YOUR SOLUTION
+            self.bias = Parameter(kaiming_uniform(fan_in=out_features, fan_out=1).transpose())
+        # END YOUR SOLUTION
 
     def forward(self, X: Tensor) -> Tensor:
-        ### BEGIN YOUR SOLUTION
+        # BEGIN YOUR SOLUTION
         if 'bias' in self.__dict__:
-            return X.matmul(self.weight)+self.bias.broadcast_to((X.shape[0],self.out_features))
+            return X.matmul(self.weight) + self.bias.broadcast_to((X.shape[0], self.out_features))
         else:
             return X.matmul(self.weight)
-        ### END YOUR SOLUTION
+        # END YOUR SOLUTION
 
 
 class Flatten(Module):
     def forward(self, X: Tensor) -> Tensor:
-        ### BEGIN YOUR SOLUTION
-        dim_2=1
+        # BEGIN YOUR SOLUTION
+        dim_2 = 1
         for axis in X.shape[1:]:
-            dim_2*=axis
-        return needle.reshape(X,(X.shape[0],dim_2))
-        ### END YOUR SOLUTION
+            dim_2 *= axis
+        return needle.reshape(X, (X.shape[0], dim_2))
+        # END YOUR SOLUTION
 
 
 class ReLU(Module):
     def forward(self, x: Tensor) -> Tensor:
-        ### BEGIN YOUR SOLUTION
+        # BEGIN YOUR SOLUTION
         return needle.relu(x)
-        ### END YOUR SOLUTION
+        # END YOUR SOLUTION
+
 
 class Sequential(Module):
     def __init__(self, *modules: Module) -> None:
@@ -125,67 +134,72 @@ class Sequential(Module):
         self.modules = modules
 
     def forward(self, x: Tensor) -> Tensor:
-        ### BEGIN YOUR SOLUTION
-        out=x
+        # BEGIN YOUR SOLUTION
+        out = x
         for module in self.modules:
-            out=module(out)
+            out = module(out)
         return out
-        ### END YOUR SOLUTION
+        # END YOUR SOLUTION
 
 
 class SoftmaxLoss(Module):
     def forward(self, logits: Tensor, y: Tensor) -> Tensor:
-        ### BEGIN YOUR SOLUTION
-        z_y=needle.summation(logits*init.one_hot(n=logits.shape[1],i=y))
-        return (needle.summation(needle.logsumexp(logits,axes=(1,)))-z_y)/logits.shape[0]
-        ### END YOUR SOLUTION
+        # BEGIN YOUR SOLUTION
+        z_y = needle.summation(logits * init.one_hot(n=logits.shape[1], i=y))
+        return (needle.summation(needle.logsumexp(logits, axes=(1,))) - z_y) / logits.shape[0]
+        # END YOUR SOLUTION
 
 
 class BatchNorm1d(Module):
-    def __init__(self, dim: int, eps: float = 1e-5, momentum: float = 0.1, device: Any | None = None, dtype: str = "float32") -> None:
+    def __init__(
+            self,
+            dim: int,
+            eps: float = 1e-5,
+            momentum: float = 0.1,
+            device: Any | None = None,
+            dtype: str = "float32") -> None:
         super().__init__()
         self.dim = dim
         self.eps = eps
         self.momentum = momentum
-        ### BEGIN YOUR SOLUTION
-        self.weight=Parameter(array=init.ones(dim))
-        self.bias=Parameter(array=init.zeros(dim))
-        self.running_mean=Parameter(array=init.zeros(dim))
-        self.running_var=Parameter(array=init.ones(dim))
-        ### END YOUR SOLUTION
+        # BEGIN YOUR SOLUTION
+        self.weight = Parameter(array=init.ones(dim))
+        self.bias = Parameter(array=init.zeros(dim))
+        self.running_mean = Tensor(array=init.zeros(dim))  # 不能定义为parameter，否则会导致反向传播出错
+        self.running_var = Tensor(array=init.ones(dim))  # 不能定义为parameter，否则会导致反向传播出错
+        # END YOUR SOLUTION
 
     def forward(self, x: Tensor) -> Tensor:
-        ### BEGIN YOUR SOLUTION
+        # BEGIN YOUR SOLUTION
+        dim = self.dim
+        x_s1 = x.shape[1]
         if self.training:
-            dim=self.dim
-            x_s1=x.shape[1]
-            
             # 计算mean
-            mean=needle.summation(x,axes=(0,))/x.shape[0]
-            reshape_mean=needle.reshape(mean,(1,x_s1))
-            
-            # 计算var
-            x_minus_mean=x-needle.broadcast_to(reshape_mean,x.shape)
-            var=needle.summation(x_minus_mean**2,axes=(0,))/x.shape[0]
-            reshape_var=needle.reshape(var,(1,x_s1))
-            var_broad_cast=needle.broadcast_to(reshape_var,x.shape)
-            
-            # 更新running_mean
-            self.running_mean=self.running_mean*(1-self.momentum)+mean*self.momentum
-            
-            # 更新running_var
-            self.running_var=self.running_var*(1-self.momentum)+var*self.momentum
-        else:
-            reshape_mean=needle.reshape(self.running_mean,(1,x_s1))
-            x_minus_mean=x-needle.broadcast_to(reshape_mean,x.shape)
-            
-            reshape_var=needle.reshape(self.running_var,(1,x_s1))
-            var_broad_cast=needle.broadcast_to(reshape_var,x.shape)
-            
-        norm=x_minus_mean/(var_broad_cast+self.eps)**0.5
-        return needle.broadcast_to(self.weight,x.shape)*norm+needle.broadcast_to(needle.reshape(self.bias,(1,dim)),x.shape)
-        ### END YOUR SOLUTION
+            mean = needle.summation(x, axes=(0,)) / x.shape[0]
+            reshape_mean = needle.reshape(mean, (1, x_s1))
 
+            # 计算var
+            x_minus_mean = x - needle.broadcast_to(reshape_mean, x.shape)
+            var = needle.summation(x_minus_mean**2, axes=(0,)) / x.shape[0]
+            reshape_var = needle.reshape(var, (1, x_s1))
+            var_broad_cast = needle.broadcast_to(reshape_var, x.shape)
+
+            # 更新running_mean (要原地更新，不要创建多余的计算图节点)
+            self.running_mean.data = self.running_mean.data.data * (1 - self.momentum) + mean * self.momentum
+
+            # 更新running_var (要原地更新，不要创建多余的计算图节点)
+            self.running_var.data = self.running_var.data * (1 - self.momentum) + var * self.momentum
+        else:
+            reshape_mean = needle.reshape(self.running_mean, (1, x_s1))
+            x_minus_mean = x - needle.broadcast_to(reshape_mean, x.shape)
+
+            reshape_var = needle.reshape(self.running_var, (1, x_s1))
+            var_broad_cast = needle.broadcast_to(reshape_var, x.shape)
+
+        norm = x_minus_mean / (var_broad_cast + self.eps)**0.5
+        return needle.broadcast_to(self.weight, x.shape) * norm + \
+            needle.broadcast_to(needle.reshape(self.bias, (1, dim)), x.shape)
+        # END YOUR SOLUTION
 
 
 class LayerNorm1d(Module):
@@ -193,21 +207,22 @@ class LayerNorm1d(Module):
         super().__init__()
         self.dim = dim
         self.eps = eps
-        ### BEGIN YOUR SOLUTION
-        self.weight=Parameter(array=init.ones(dim))
-        self.bias=Parameter(array=init.zeros(dim))
-        ### END YOUR SOLUTION
+        # BEGIN YOUR SOLUTION
+        self.weight = Parameter(array=init.ones(dim))
+        self.bias = Parameter(array=init.zeros(dim))
+        # END YOUR SOLUTION
 
     def forward(self, x: Tensor) -> Tensor:
-        ### BEGIN YOUR SOLUTION
-        dim=self.dim
-        mean=needle.reshape(needle.summation(x,axes=(1,))/dim,(x.shape[0],1))
-        x_minus_mean=x-needle.broadcast_to(mean,x.shape)
-        var=needle.reshape(needle.summation(x_minus_mean**2,axes=(1,))/dim,(x.shape[0],1))
-        var_broad_cast=needle.broadcast_to(var,x.shape)
-        norm=x_minus_mean/(var_broad_cast+self.eps)**0.5
-        return needle.broadcast_to(self.weight,x.shape)*norm+needle.broadcast_to(needle.reshape(self.bias,(1,dim)),x.shape)
-        ### END YOUR SOLUTION
+        # BEGIN YOUR SOLUTION
+        dim = self.dim
+        mean = needle.reshape(needle.summation(x, axes=(1,)) / dim, (x.shape[0], 1))
+        x_minus_mean = x - needle.broadcast_to(mean, x.shape)
+        var = needle.reshape(needle.summation(x_minus_mean**2, axes=(1,)) / dim, (x.shape[0], 1))
+        var_broad_cast = needle.broadcast_to(var, x.shape)
+        norm = x_minus_mean / (var_broad_cast + self.eps)**0.5
+        return needle.broadcast_to(self.weight, x.shape) * norm + \
+            needle.broadcast_to(needle.reshape(self.bias, (1, dim)), x.shape)
+        # END YOUR SOLUTION
 
 
 class Dropout(Module):
@@ -216,12 +231,12 @@ class Dropout(Module):
         self.p = p
 
     def forward(self, x: Tensor) -> Tensor:
-        ### BEGIN YOUR SOLUTION
+        # BEGIN YOUR SOLUTION
         if self.training:
-            return x*randb(*x.shape,p=self.p,dtype=float)/(1-self.p)
+            return x * randb(*x.shape, p=self.p, dtype=float) / (1 - self.p)
         else:
             return x
-        ### END YOUR SOLUTION
+        # END YOUR SOLUTION
 
 
 class Residual(Module):
@@ -230,6 +245,6 @@ class Residual(Module):
         self.fn = fn
 
     def forward(self, x: Tensor) -> Tensor:
-        ### BEGIN YOUR SOLUTION
-        return self.fn(x)+x
-        ### END YOUR SOLUTION
+        # BEGIN YOUR SOLUTION
+        return self.fn(x) + x
+        # END YOUR SOLUTION
