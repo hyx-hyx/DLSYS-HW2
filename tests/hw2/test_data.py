@@ -1,10 +1,9 @@
+import numpy as np
+import needle as ndl
+import mugrade
 import sys
 
 sys.path.append("./python")
-import needle as ndl
-import numpy as np
-
-import mugrade
 
 
 def test_flip_horizontal():
@@ -10732,7 +10731,8 @@ def test_mnist_dataset():
         ]
     )
     compare_against = np.array(
-        [9.857545, 8.980832, 8.57207, 6.891522, 8.192135, 9.400087, 8.645003, 7.405202]
+        [9.857545, 8.980832, 8.57207, 6.891522,
+            8.192135, 9.400087, 8.645003, 7.405202]
     )
     sample_labels = np.array(
         [
@@ -10742,7 +10742,8 @@ def test_mnist_dataset():
     )
     compare_labels = np.array([2, 4, 9, 6, 6, 9, 3, 1])
 
-    np.testing.assert_allclose(sample_norms, compare_against, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(
+        sample_norms, compare_against, rtol=1e-5, atol=1e-5)
     np.testing.assert_allclose(sample_labels, compare_labels)
 
     # test a transform
@@ -10771,7 +10772,8 @@ def test_mnist_dataset():
     )
     compare_labels = np.array([0, 7, 0, 5, 9, 7, 7, 8])
 
-    np.testing.assert_allclose(sample_norms, compare_against, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(
+        sample_norms, compare_against, rtol=1e-5, atol=1e-5)
     np.testing.assert_allclose(sample_labels, compare_labels)
 
     # test a transform
@@ -10807,7 +10809,8 @@ def test_mnist_dataset():
     )
     compare_labels = np.array([0, 7, 0, 5, 9, 7, 7, 8])
 
-    np.testing.assert_allclose(sample_norms, compare_against, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(
+        sample_norms, compare_against, rtol=1e-5, atol=1e-5)
     np.testing.assert_allclose(sample_labels, compare_labels)
 
 
@@ -10850,7 +10853,7 @@ def test_dataloader_mnist():
 
     for i, batch in enumerate(mnist_train_dataloader):
         batch_x, batch_y = batch[0].numpy(), batch[1].numpy()
-        truth = mnist_train_dataset[i * batch_size : (i + 1) * batch_size]
+        truth = mnist_train_dataset[i * batch_size: (i + 1) * batch_size]
         truth_x = truth[0] if truth[0].shape[0] > 1 else truth[0].reshape(-1)
         truth_y = truth[1] if truth[1].shape[0] > 1 else truth[1].reshape(-1)
 
@@ -10867,7 +10870,7 @@ def test_dataloader_mnist():
 
     for i, batch in enumerate(mnist_test_dataloader):
         batch_x, batch_y = batch[0].numpy(), batch[1].numpy()
-        truth = mnist_test_dataset[i * batch_size : (i + 1) * batch_size]
+        truth = mnist_test_dataset[i * batch_size: (i + 1) * batch_size]
         truth_x = truth[0]
         truth_y = truth[1]
 
@@ -10899,7 +10902,7 @@ def test_dataloader_ndarray():
 
         for i, batch in enumerate(train_dataloader):
             batch_x = batch[0].numpy()
-            truth_x = train_dataset[i * batch_size : (i + 1) * batch_size][0].reshape(
+            truth_x = train_dataset[i * batch_size: (i + 1) * batch_size][0].reshape(
                 (batch_size, 10, 10)
             )
             np.testing.assert_allclose(truth_x, batch_x)
@@ -10912,10 +10915,12 @@ def test_dataloader_ndarray():
         )
     )
     train_dataloader = iter(
-        ndl.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+        ndl.data.DataLoader(dataset=train_dataset,
+                            batch_size=batch_size, shuffle=True)
     )
 
-    elements = np.array([next(train_dataloader)[0].numpy().item() for _ in range(10)])
+    elements = np.array([next(train_dataloader)[0].numpy().item()
+                        for _ in range(10)])
     np.testing.assert_allclose(
         elements, np.array([26, 86, 2, 55, 75, 93, 16, 73, 54, 95])
     )
@@ -10927,7 +10932,8 @@ def test_dataloader_ndarray():
         )
     )
     train_dataloader = iter(
-        ndl.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+        ndl.data.DataLoader(dataset=train_dataset,
+                            batch_size=batch_size, shuffle=True)
     )
 
     elements = np.array(
@@ -10988,7 +10994,8 @@ def submit_dataloader():
     mugrade.submit(subl_y[-2:])
 
     np.random.seed(0)
-    shuf = ndl.data.DataLoader(dataset=mnist_test_dataset, batch_size=10, shuffle=True)
+    shuf = ndl.data.DataLoader(
+        dataset=mnist_test_dataset, batch_size=10, shuffle=True)
     subl_x = []
     subl_y = []
     for i, batch in enumerate(mnist_test_dataloader):
