@@ -64,20 +64,28 @@ def epoch(dataloader, model, opt=None):
         model.train()
     else:
         model.eval()
-    loss = 0
-    error = 0
-    for i, batch in enumerate(dataloader):
+    sum_loss = 0        # 批次损失和
+    sum_error = 0       # 预测错误数量之和
+    batch_num = 0       # 批次数
+    examples_num = 0    # 样本数
+    for _, batch in enumerate(dataloader):
+        batch_num += 1
         batch_x, batch_y = batch[0], batch[1]
+        examples_num += batch_x.shape[0]
 
-        num_examples, input_dim = batch_x.shape
-        num_classes = batch_y.shape[0]
         logits = model.forward(batch_x)
-        error += (logits != batch_y)
+        ans = np.argmax(logits.numpy(), 1)
+        sum_error += np.sum(ans != batch_y.numpy())
+
         f = ndl.nn.SoftmaxLoss()
-        loss += f(logits, batch_y)
-        loss.backward()
-        opt.step()
-    return error, loss
+        batch_loss = f(logits, batch_y)
+        sum_loss += batch_loss.numpy()
+
+        if opt:
+            opt.reset_grad()
+            batch_loss.backward()
+            opt.step()
+    return sum_error / examples_num, sum_loss / batch_num
     # END YOUR SOLUTION
 
 
