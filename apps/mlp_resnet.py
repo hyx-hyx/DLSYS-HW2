@@ -6,6 +6,12 @@ import needle as ndl
 import needle.nn as nn
 import numpy as np
 
+from python.needle import data
+from python.needle.data.data_basic import DataLoader
+from python.needle.data.datasets import mnist_dataset
+from python.needle.data.datasets.mnist_dataset import MNISTDataset
+from tests.hw2.test_nn_and_optim import softmax_loss_forward
+
 sys.path.append("../python")
 
 
@@ -43,7 +49,8 @@ def MLPResNet(
     model_list = []
     model_list.append(nn.Sequential(nn.Linear(dim, hidden_dim), nn.ReLU()))
     for _ in range(num_blocks):
-        model_list.append(ResidualBlock(hidden_dim, hidden_dim // 2, norm, drop_prob))
+        model_list.append(ResidualBlock(
+            hidden_dim, hidden_dim // 2, norm, drop_prob))
     model_list.append(nn.Linear(hidden_dim, num_classes))
 
     return nn.Sequential(*(tuple(model_list)))
@@ -53,7 +60,24 @@ def MLPResNet(
 def epoch(dataloader, model, opt=None):
     np.random.seed(4)
     # BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    if opt:
+        model.train()
+    else:
+        model.eval()
+    loss = 0
+    error = 0
+    for i, batch in enumerate(dataloader):
+        batch_x, batch_y = batch[0], batch[1]
+
+        num_examples, input_dim = batch_x.shape
+        num_classes = batch_y.shape[0]
+        logits = model.forward(batch_x)
+        error += (logits != batch_y)
+        f = ndl.nn.SoftmaxLoss()
+        loss += f(logits, batch_y)
+        loss.backward()
+        opt.step()
+    return error, loss
     # END YOUR SOLUTION
 
 
@@ -68,7 +92,16 @@ def train_mnist(
 ):
     np.random.seed(4)
     # BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    data_mnist_dataset = MNISTDataset(
+        "train-images-idx3-ubyte", "train-labels-idx1-ubyte")
+    test_mnist_dataset = MNISTDataset(
+        "t10k-images-idx3-ubyte", "t10k-labels-idx1-ubyte.gz")
+    dataloader = DataLoader(data_mnist_dataset, batch_size=batch_size)
+    testloader = DataLoader(test_mnist_dataset, batch_size=batch_size)
+    model = MLPResNet(784, hidden_dim)
+
+    for _ in range(epochs):
+        epoch(dataloader, model=model, opt=optimizer)
     # END YOUR SOLUTION
 
 
