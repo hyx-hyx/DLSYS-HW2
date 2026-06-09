@@ -5,6 +5,7 @@ import time
 import needle as ndl
 import needle.nn as nn
 import numpy as np
+from pytest import param
 
 from python.needle import data
 from python.needle.data.data_basic import DataLoader
@@ -101,15 +102,30 @@ def train_mnist(
     np.random.seed(4)
     # BEGIN YOUR SOLUTION
     data_mnist_dataset = MNISTDataset(
-        "train-images-idx3-ubyte", "train-labels-idx1-ubyte")
+        data_dir+"/"+"train-images-idx3-ubyte.gz", data_dir+"/"+"train-labels-idx1-ubyte.gz")
     test_mnist_dataset = MNISTDataset(
-        "t10k-images-idx3-ubyte", "t10k-labels-idx1-ubyte.gz")
-    dataloader = DataLoader(data_mnist_dataset, batch_size=batch_size)
+        data_dir+"/"+"t10k-images-idx3-ubyte.gz", data_dir+"/"+"t10k-labels-idx1-ubyte.gz")
+    
+    dataloader = DataLoader(
+        data_mnist_dataset, batch_size=batch_size, shuffle=True)
     testloader = DataLoader(test_mnist_dataset, batch_size=batch_size)
+    
     model = MLPResNet(784, hidden_dim)
 
+    train_loss = []
+    train_error = []
+    test_loss = []
+    test_error = []
     for _ in range(epochs):
-        epoch(dataloader, model=model, opt=optimizer)
+        error, loss = epoch(dataloader, model=model, opt=optimizer(
+            params=model.parameters(), lr=lr, weight_decay=weight_decay))
+        train_error.append(error)
+        train_loss.append(loss)
+        
+        error, loss = epoch(testloader, model=model)
+        test_error.append(error)
+        test_loss.append(loss)
+    return train_error[-1], train_loss[-1], test_error[-1], test_loss[-1]
     # END YOUR SOLUTION
 
 
